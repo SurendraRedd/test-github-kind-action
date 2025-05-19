@@ -3,8 +3,6 @@ name: KinD Cluster CI
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       skip_checks:
@@ -14,14 +12,17 @@ on:
 
 jobs:
   kind:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # use 'ubuntu-latest' only if hosted runners are enabled
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
 
       - name: Install KinD
         run: |
@@ -32,16 +33,16 @@ jobs:
       - name: Create KinD cluster
         run: kind create cluster --wait 60s
 
-      - name: Show cluster info
+      - name: Verify cluster is up
         run: |
           kubectl cluster-info
           kubectl get nodes
 
-      - name: Conditionally Run Checks
+      - name: Conditionally run checks
         if: ${{ github.event.inputs.skip_checks != 'true' }}
         run: |
-          echo "Running checks..."
-          kubectl get pods
+          echo "Running pre-checks..."
+          kubectl get pods --all-namespaces
 
       - name: Deploy test pod
         run: |
@@ -54,12 +55,15 @@ jobs:
             containers:
             - name: hello
               image: busybox
-              command: ['sh', '-c', 'echo Hello, Kubernetes! && sleep 3600']
+              command: ['sh', '-c', 'echo Hello from Kubernetes! && sleep 30']
           " | kubectl apply -f -
+
+      - name: Wait for pod to be ready
+        run: kubectl wait --for=condition=Ready pod/hello --timeout=60s
 
       - name: Check pod status
         run: kubectl get pods
 
-      - name: Delete KinD cluster (cleanup)
+      - name: Delete KinD cluster
         if: always()
         run: kind delete cluster

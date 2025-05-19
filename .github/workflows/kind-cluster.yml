@@ -1,0 +1,65 @@
+name: KinD Cluster CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      skip_checks:
+        description: 'Skip checks'
+        required: false
+        default: 'false'
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install KinD
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Create KinD cluster
+        run: kind create cluster --wait 60s
+
+      - name: Show cluster info
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Conditionally Run Checks
+        if: ${{ github.event.inputs.skip_checks != 'true' }}
+        run: |
+          echo "Running checks..."
+          kubectl get pods
+
+      - name: Deploy test pod
+        run: |
+          echo "
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: hello
+          spec:
+            containers:
+            - name: hello
+              image: busybox
+              command: ['sh', '-c', 'echo Hello, Kubernetes! && sleep 3600']
+          " | kubectl apply -f -
+
+      - name: Check pod status
+        run: kubectl get pods
+
+      - name: Delete KinD cluster (cleanup)
+        if: always()
+        run: kind delete cluster

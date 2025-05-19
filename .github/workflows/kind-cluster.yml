@@ -12,7 +12,7 @@ on:
 
 jobs:
   kind:
-    runs-on: self-hosted  # use 'ubuntu-latest' only if hosted runners are enabled
+    runs-on: ubuntu-latest  # use 'ubuntu-latest' only if hosted runners are enabled
 
     steps:
       - name: Checkout code

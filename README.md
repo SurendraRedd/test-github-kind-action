@@ -1,2 +1,2 @@
 # test-github-kind-action
-test-github-kind-action
+Test Github actions check
